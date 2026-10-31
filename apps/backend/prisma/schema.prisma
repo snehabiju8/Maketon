@@ -1,6 +1,9 @@
+// Neon: the application uses the pooled connection (DATABASE_URL);
+// Prisma Migrate and other CLI commands use the direct connection (DIRECT_URL).
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {

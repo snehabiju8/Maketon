@@ -813,16 +813,16 @@ No deferred integration should be introduced merely because it is commonly used 
 
 ## 11.1 MVP Local Development
 
-Docker Compose will be used to run PostgreSQL locally.
+The database is a shared hosted Neon PostgreSQL instance; there is no local PostgreSQL container.
 
-The frontend and backend can run as development processes.
+The frontend and backend run as development processes via npm scripts. Docker Compose will later be used only to run the frontend and backend together, with database credentials injected at runtime.
 
 ```mermaid
 flowchart TB
     B["Browser"]
     FE["React Development Server"]
     API["Express Development Server"]
-    DB[("PostgreSQL Container")]
+    DB[("Neon PostgreSQL (hosted)")]
 
     B --> FE
     FE --> API

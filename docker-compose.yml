@@ -1,16 +1,7 @@
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: brightloop-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: brightloop
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+# Brightloop uses a hosted Neon PostgreSQL database. Do not add a local
+# PostgreSQL service or database volume here.
+#
+# Frontend and backend services will be added later. The backend container must
+# receive DATABASE_URL, DIRECT_URL and other secrets at runtime (for example
+# `env_file: ./apps/backend/.env`); never bake .env or credentials into images.
+services: {}
