@@ -1,0 +1,276 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  INTERNAL
+  CUSTOMER
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum VariantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BillingInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  CONFIRMED
+  ACTIVE
+  CLOSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  UPI
+  OTHER
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(CUSTOMER)
+  customerId   String?   @unique @map("customer_id") @db.Uuid
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  payments     Payment[]
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("users")
+}
+
+model Customer {
+  id             String         @id @default(uuid()) @db.Uuid
+  name           String
+  email          String
+  phone          String?
+  billingAddress String?        @map("billing_address") @db.Text
+  status         CustomerStatus @default(ACTIVE)
+  user           User?
+  subscriptions  Subscription[]
+  invoices       Invoice[]
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("customers")
+}
+
+model Product {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String
+  description String?          @db.Text
+  status      ProductStatus    @default(ACTIVE)
+  variants    ProductVariant[]
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id                String             @id @default(uuid()) @db.Uuid
+  productId         String             @map("product_id") @db.Uuid
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name              String
+  sku               String?            @unique
+  defaultPrice      Decimal            @map("default_price") @db.Decimal(12, 2)
+  status            VariantStatus      @default(ACTIVE)
+  subscriptionLines SubscriptionLine[]
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("product_variants")
+}
+
+model Plan {
+  id              String          @id @default(uuid()) @db.Uuid
+  name            String
+  billingInterval BillingInterval @map("billing_interval")
+  intervalCount   Int             @default(1) @map("interval_count")
+  minimumQuantity Int             @default(1) @map("minimum_quantity")
+  status          PlanStatus      @default(ACTIVE)
+  subscriptions   Subscription[]
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("plans")
+}
+
+model Tax {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  rate          Decimal        @db.Decimal(5, 2)
+  isActive      Boolean        @default(true) @map("is_active")
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("taxes")
+}
+
+model Discount {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  percentage    Decimal        @db.Decimal(5, 2)
+  isActive      Boolean        @default(true) @map("is_active")
+  maxUses       Int?           @map("max_uses")
+  timesUsed     Int            @default(0) @map("times_used")
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("discounts")
+}
+
+model Subscription {
+  id                 String              @id @default(uuid()) @db.Uuid
+  subscriptionNumber String              @unique @map("subscription_number")
+  customerId         String              @map("customer_id") @db.Uuid
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  planId             String              @map("plan_id") @db.Uuid
+  plan               Plan                @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status             SubscriptionStatus  @default(DRAFT)
+  startDate          DateTime            @map("start_date") @db.Timestamptz
+  nextBillingDate    DateTime            @map("next_billing_date") @db.Timestamptz
+  expiryDate         DateTime?           @map("expiry_date") @db.Timestamptz
+  paymentTermsDays   Int                 @default(15) @map("payment_terms_days")
+  currency           String              @default("INR") @db.VarChar(3)
+  taxId              String?             @map("tax_id") @db.Uuid
+  tax                Tax?                @relation(fields: [taxId], references: [id], onDelete: SetNull)
+  taxRateSnapshot    Decimal?            @map("tax_rate_snapshot") @db.Decimal(5, 2)
+  discountId         String?             @map("discount_id") @db.Uuid
+  discount           Discount?           @relation(fields: [discountId], references: [id], onDelete: SetNull)
+  discountPercentage Decimal             @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  lines              SubscriptionLine[]
+  events             SubscriptionEvent[]
+  invoices           Invoice[]
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status, nextBillingDate])
+  @@index([customerId])
+  @@map("subscriptions")
+}
+
+model SubscriptionLine {
+  id                  String         @id @default(uuid()) @db.Uuid
+  subscriptionId      String         @map("subscription_id") @db.Uuid
+  subscription        Subscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  variantId           String         @map("variant_id") @db.Uuid
+  variant             ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  descriptionSnapshot String         @map("description_snapshot")
+  quantity            Int
+  unitPrice           Decimal        @map("unit_price") @db.Decimal(12, 2)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("subscription_lines")
+}
+
+model SubscriptionEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  subscriptionId String       @map("subscription_id") @db.Uuid
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  eventType      String       @map("event_type")
+  previousStatus String?      @map("previous_status")
+  newStatus      String?      @map("new_status")
+  actorUserId    String?      @map("actor_user_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_events")
+}
+
+model Invoice {
+  id                 String        @id @default(uuid()) @db.Uuid
+  invoiceNumber      String        @unique @map("invoice_number")
+  subscriptionId     String        @map("subscription_id") @db.Uuid
+  subscription       Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  customerId         String        @map("customer_id") @db.Uuid
+  customer           Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  periodStart        DateTime      @map("period_start") @db.Timestamptz
+  periodEnd          DateTime      @map("period_end") @db.Timestamptz
+  issueDate          DateTime      @map("issue_date") @db.Timestamptz
+  dueDate            DateTime      @map("due_date") @db.Timestamptz
+  status             InvoiceStatus @default(DRAFT)
+  currency           String        @default("INR") @db.VarChar(3)
+  subtotal           Decimal       @db.Decimal(12, 2)
+  discountPercentage Decimal       @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  discountAmount     Decimal       @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxNameSnapshot    String?       @map("tax_name_snapshot")
+  taxRate            Decimal       @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount          Decimal       @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount        Decimal       @map("total_amount") @db.Decimal(12, 2)
+  lines              InvoiceLine[]
+  payments           Payment[]
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([subscriptionId, periodStart])
+  @@index([status, dueDate])
+  @@index([customerId, status])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id                  String   @id @default(uuid()) @db.Uuid
+  invoiceId           String   @map("invoice_id") @db.Uuid
+  invoice             Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  descriptionSnapshot String   @map("description_snapshot")
+  quantity            Int
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(12, 2)
+  lineTotal           Decimal  @map("line_total") @db.Decimal(12, 2)
+
+  @@map("invoice_lines")
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  invoiceId     String        @map("invoice_id") @db.Uuid
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @map("payment_method")
+  reference     String?
+  paidAt        DateTime      @map("paid_at") @db.Timestamptz
+  recordedBy    String?       @map("recorded_by") @db.Uuid
+  user          User?         @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([invoiceId])
+  @@map("payments")
+}
