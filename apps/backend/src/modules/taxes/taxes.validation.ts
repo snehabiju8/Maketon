@@ -42,10 +42,12 @@ export const taxRateSchema = z
 
 export const listTaxesQuerySchema = z.object({
   isActive: z
-    .enum(["true", "false"], {
+    .union([
+      z.boolean(),
+      z.enum(["true", "false"]).transform((val) => val === "true"),
+    ], {
       errorMap: () => ({ message: "isActive filter must be 'true' or 'false'" }),
     })
-    .transform((val) => val === "true")
     .optional(),
 });
 

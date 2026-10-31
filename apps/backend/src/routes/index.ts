@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import productsRouter from "../modules/products/products.routes";
 import plansRouter from "../modules/plans/plans.routes";
+import taxesRouter from "../modules/taxes/taxes.routes";
 import invoicesRoutes from "../modules/invoices/invoices.routes";
 import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
 import dashboardRoutes from "../modules/dashboard/dashboard.routes";
@@ -64,9 +65,10 @@ router.get(
   }),
 );
 
-// Products, Variants, and Plans modules (Member 2)
+// Products, Variants, Plans, and Taxes modules (Member 2)
 router.use("/products", productsRouter);
 router.use("/plans", plansRouter);
+router.use("/taxes", taxesRouter);
 
 // Register Module 1 Routes
 router.use("/auth", authRoutes);
