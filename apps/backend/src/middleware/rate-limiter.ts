@@ -9,7 +9,7 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: (_req, _res, next) => {
     next(
-      AppError.forbidden(
+      AppError.tooManyRequests(
         "Too many login or registration attempts. Please try again after 15 minutes.",
         "RATE_LIMIT_EXCEEDED",
       ),
@@ -24,7 +24,7 @@ export const generalRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: (_req, _res, next) => {
     next(
-      AppError.forbidden(
+      AppError.tooManyRequests(
         "Too many requests from this IP. Please try again shortly.",
         "RATE_LIMIT_EXCEEDED",
       ),

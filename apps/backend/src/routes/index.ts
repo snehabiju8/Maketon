@@ -4,6 +4,11 @@ import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 
+// Module routes
+import authRoutes from "../modules/auth/auth.routes";
+import usersRoutes from "../modules/users/users.routes";
+import customersRoutes from "../modules/customers/customers.routes";
+
 const router = Router();
 
 // Allows for a Neon compute waking up from suspension
@@ -15,7 +20,10 @@ const checkDatabase = async (): Promise<boolean> => {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Database health check timed out")), DB_HEALTH_TIMEOUT_MS);
+        timer = setTimeout(
+          () => reject(new Error("Database health check timed out")),
+          DB_HEALTH_TIMEOUT_MS,
+        );
       }),
     ]);
     return true;
@@ -50,5 +58,10 @@ router.get(
     return sendSuccess(res, data, "Brightloop API is running", 200);
   }),
 );
+
+// Register Module 1 Routes
+router.use("/auth", authRoutes);
+router.use("/users", usersRoutes);
+router.use("/customers", customersRoutes);
 
 export default router;
