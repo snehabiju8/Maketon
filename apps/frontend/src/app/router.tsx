@@ -4,13 +4,13 @@ import { AuthLayout } from "@/layouts/AuthLayout";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { RegisterPage } from "@/features/auth/RegisterPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
-import { CustomersPage } from "@/features/customers/CustomersPage";
+import { CustomersPage } from "@/features/customers/pages/CustomersPage";
 import { ProductsPage } from "@/features/products/ProductsPage";
 import { PlansPage } from "@/features/plans/PlansPage";
 import { SubscriptionsPage } from "@/features/subscriptions/SubscriptionsPage";
 import { InvoicesPage } from "@/features/invoices/InvoicesPage";
 import { PaymentsPage } from "@/features/payments/PaymentsPage";
-import { CustomerPortalPage } from "@/features/portal/CustomerPortalPage";
+import { CustomerProfilePage } from "@/features/customers/pages/CustomerProfilePage";
 import { NotFoundPage } from "@/components/common/NotFoundPage";
 import { ProtectedRoute } from "@/components/common/ProtectedRoute";
 
@@ -81,7 +81,7 @@ export const router = createBrowserRouter([
         children: [
           {
             path: "/portal",
-            element: <CustomerPortalPage />,
+            element: <CustomerProfilePage />,
           },
         ],
       },
