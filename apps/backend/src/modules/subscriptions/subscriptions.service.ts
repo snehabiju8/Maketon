@@ -21,26 +21,24 @@ export class SubscriptionService {
   ) {}
 
   /**
-   * Generates a unique, concurrency-safe subscription number: SUB-YYYYMM-XXXX
+   * Generates a unique subscription number and retries unique-key collisions.
    */
-  async generateSubscriptionNumber(): Promise<string> {
+  async generateSubscriptionNumber(sequenceOffset = 0): Promise<string> {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const prefix = `SUB-${year}${month}`;
 
     const seq = await this.repo.getNextSubscriptionSequenceNumber();
-    let candidate = `${prefix}-${String(seq).padStart(4, "0")}`;
+    let candidateSequence = seq + sequenceOffset;
+    let candidate = `${prefix}-${String(candidateSequence).padStart(4, "0")}`;
 
-    // Verify uniqueness
-    const existing = await this.repo.findBySubscriptionNumber(candidate);
-    if (!existing) {
-      return candidate;
+    while (await this.repo.findBySubscriptionNumber(candidate)) {
+      candidateSequence += 1;
+      candidate = `${prefix}-${String(candidateSequence).padStart(4, "0")}`;
     }
 
-    // If collision, append timestamp slice
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    return `${prefix}-${randomSuffix}`;
+    return candidate;
   }
 
   /**
@@ -61,6 +59,9 @@ export class SubscriptionService {
     if (!plan) {
       throw AppError.notFound(`Subscription plan with ID ${input.planId} not found`);
     }
+    if (plan.status === "INACTIVE") {
+      throw AppError.badRequest("Inactive subscription plans cannot be selected");
+    }
 
     // 3. Validate Line Items and Plan Minimum Quantity
     let totalQuantity = 0;
@@ -79,6 +80,11 @@ export class SubscriptionService {
       const variant = await this.repo.findVariantById(line.variantId);
       if (!variant) {
         throw AppError.notFound(`Product variant with ID ${line.variantId} not found`);
+      }
+      if (variant.status === "INACTIVE" || variant.productStatus === "INACTIVE") {
+        throw AppError.badRequest(
+          "Inactive products and product variants cannot be selected",
+        );
       }
 
       totalQuantity += line.quantity;
@@ -141,38 +147,53 @@ export class SubscriptionService {
     }
 
     const nextBillingDate = new Date(startDate);
-    const subNumber = await this.generateSubscriptionNumber();
     const subId = randomUUID();
 
     // 7. Persist via repository
-    return await this.repo.createSubscription({
-      id: subId,
-      subscriptionNumber: subNumber,
-      customerId: customer.id,
-      planId: plan.id,
-      status: SubscriptionStatus.DRAFT,
-      startDate,
-      nextBillingDate,
-      expiryDate,
-      paymentTermsDays: input.paymentTermsDays || 15,
-      currency: input.currency || "INR",
-      taxId,
-      taxRateSnapshot,
-      discountId,
-      discountPercentage,
-      lines: resolvedLines,
-      event: {
-        eventType: "SUBSCRIPTION_CREATED",
-        previousStatus: null,
-        newStatus: SubscriptionStatus.DRAFT,
-        actorUserId,
-        metadata: {
-          note: "Subscription draft created",
-          totalQuantity,
-          lineCount: resolvedLines.length,
-        },
-      },
-    });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const subNumber = await this.generateSubscriptionNumber(attempt);
+      try {
+        return await this.repo.createSubscription({
+          id: subId,
+          subscriptionNumber: subNumber,
+          customerId: customer.id,
+          planId: plan.id,
+          status: SubscriptionStatus.DRAFT,
+          startDate,
+          nextBillingDate,
+          expiryDate,
+          paymentTermsDays: input.paymentTermsDays || 15,
+          currency: input.currency || "INR",
+          taxId,
+          taxRateSnapshot,
+          discountId,
+          discountPercentage,
+          lines: resolvedLines,
+          event: {
+            eventType: "SUBSCRIPTION_CREATED",
+            previousStatus: null,
+            newStatus: SubscriptionStatus.DRAFT,
+            actorUserId,
+            metadata: {
+              note: "Subscription draft created",
+              totalQuantity,
+              lineCount: resolvedLines.length,
+            },
+          },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002" &&
+          attempt < 2
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw new Error("Unable to generate a unique subscription number");
   }
 
   /**

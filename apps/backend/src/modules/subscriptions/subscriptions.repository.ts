@@ -218,6 +218,7 @@ export class SubscriptionRepository {
           billingInterval: p.billingInterval,
           intervalCount: p.intervalCount,
           minimumQuantity: p.minimumQuantity,
+          status: p.status,
         };
       },
       () => DEV_FIXTURE_PLANS.find((p) => p.id === planId) || null,
@@ -244,6 +245,8 @@ export class SubscriptionRepository {
           variantName: v.name,
           sku: v.sku,
           defaultPrice: v.defaultPrice.toFixed(2),
+          status: v.status,
+          productStatus: v.product.status,
         };
       },
       () => DEV_FIXTURE_VARIANTS.find((v) => v.id === variantId) || null,
@@ -714,6 +717,7 @@ export class SubscriptionRepository {
                   billingInterval: p.billingInterval,
                   intervalCount: p.intervalCount,
                   minimumQuantity: p.minimumQuantity,
+                  status: p.status,
                 }))
               : DEV_FIXTURE_PLANS,
           variants:
@@ -725,6 +729,8 @@ export class SubscriptionRepository {
                   variantName: v.name,
                   sku: v.sku,
                   defaultPrice: v.defaultPrice.toFixed(2),
+                  status: v.status,
+                  productStatus: v.product.status,
                 }))
               : DEV_FIXTURE_VARIANTS,
           taxes:
@@ -876,4 +882,3 @@ export class SubscriptionRepository {
 }
 
 export const subscriptionRepository = new SubscriptionRepository();
-

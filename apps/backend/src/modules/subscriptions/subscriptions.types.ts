@@ -1,6 +1,13 @@
-import { Prisma, SubscriptionStatus, BillingInterval } from "@prisma/client";
+import {
+  Prisma,
+  SubscriptionStatus,
+  BillingInterval,
+  PlanStatus,
+  VariantStatus,
+  ProductStatus,
+} from "@prisma/client";
 
-export { SubscriptionStatus, BillingInterval };
+export { SubscriptionStatus, BillingInterval, PlanStatus, VariantStatus, ProductStatus };
 
 export interface SubscriptionPricingBreakdown {
   subtotal: string;
@@ -85,6 +92,7 @@ export interface SubscriptionPlanDto {
   billingInterval: BillingInterval;
   intervalCount: number;
   minimumQuantity: number;
+  status?: PlanStatus;
 }
 
 export interface SubscriptionDetailsDto {
@@ -130,6 +138,8 @@ export interface CatalogVariantPreviewDto {
   variantName: string;
   sku: string | null;
   defaultPrice: string;
+  status?: VariantStatus;
+  productStatus?: ProductStatus;
 }
 
 export interface CatalogPreviewDto {
@@ -139,4 +149,3 @@ export interface CatalogPreviewDto {
   taxes: { id: string; name: string; rate: string }[];
   discounts: { id: string; name: string; percentage: string }[];
 }
-
