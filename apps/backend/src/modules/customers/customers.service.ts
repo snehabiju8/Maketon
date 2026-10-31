@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import { customersRepository, CustomersRepository } from "./customers.repository";
 import { CreateCustomerInput, CustomerQueryInput, CustomerResponse, UpdateCustomerInput } from "./customers.types";
 import { assertCustomerAccess } from "../../middleware/authorize";
@@ -9,8 +9,17 @@ export class CustomersService {
   constructor(private repo: CustomersRepository = customersRepository) {}
 
   async createCustomer(input: CreateCustomerInput): Promise<CustomerResponse> {
-    const customer = await this.repo.create(input);
-    return customer;
+    try {
+      return await this.repo.create(input);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw AppError.conflict(
+          "A customer profile with this email address already exists.",
+          "CUSTOMER_EMAIL_ALREADY_EXISTS",
+        );
+      }
+      throw error;
+    }
   }
 
   async listCustomers(query: CustomerQueryInput) {
@@ -61,7 +70,17 @@ export class CustomersService {
       delete updateData.status;
     }
 
-    return this.repo.update(id, updateData);
+    try {
+      return await this.repo.update(id, updateData);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw AppError.conflict(
+          "A customer profile with this email address already exists.",
+          "CUSTOMER_EMAIL_ALREADY_EXISTS",
+        );
+      }
+      throw error;
+    }
   }
 }
 
