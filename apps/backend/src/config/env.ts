@@ -31,6 +31,9 @@ const envSchema = z.object({
     .transform((val) => val === "true")
     .default("false"),
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(9).optional(),
+  ADMIN_NAME: z.string().optional(),
 });
 
 const parseEnv = () => {

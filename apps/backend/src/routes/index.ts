@@ -3,6 +3,7 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+// Member 3: Subscription Management & Pricing
 import subscriptionRoutes from "../modules/subscriptions/subscriptions.routes";
 
 const router = Router();
@@ -16,7 +17,10 @@ const checkDatabase = async (): Promise<boolean> => {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Database health check timed out")), DB_HEALTH_TIMEOUT_MS);
+        timer = setTimeout(
+          () => reject(new Error("Database health check timed out")),
+          DB_HEALTH_TIMEOUT_MS,
+        );
       }),
     ]);
     return true;

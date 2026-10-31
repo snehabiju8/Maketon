@@ -45,6 +45,13 @@ export class AppError extends Error {
     return new AppError(message, 422, code);
   }
 
+  static tooManyRequests(
+    message: string = "Too many requests. Please try again later.",
+    code: string = "RATE_LIMIT_EXCEEDED",
+  ): AppError {
+    return new AppError(message, 429, code);
+  }
+
   static internal(
     message: string = "Internal server error",
     code: string = "INTERNAL_SERVER_ERROR",
