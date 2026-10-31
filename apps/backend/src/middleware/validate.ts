@@ -25,3 +25,6 @@ export const validateRequest = (schema: RequestValidationSchema) => {
     }
   };
 };
+
+// Backward-compatible body validation interface used by the auth/customer/user routes.
+export const validate = (schema: ZodSchema) => validateRequest({ body: schema });

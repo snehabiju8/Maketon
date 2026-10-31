@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";
+import { signToken } from "../src/lib/jwt";
 import { app } from "../src/app";
+import { subscriptionRepository } from "../src/modules/subscriptions/subscriptions.repository";
 import {
   DEV_FIXTURE_CUSTOMERS,
   DEV_FIXTURE_PLANS,
@@ -8,6 +10,113 @@ import {
   DEV_FIXTURE_TAXES,
   DEV_FIXTURE_DISCOUNTS,
 } from "../src/modules/subscriptions/subscriptions.fixtures";
+
+const ADMIN_USER_ID = "00000000-0000-0000-0000-000000000001";
+const CUSTOMER_USER_ID = "00000000-0000-0000-0000-000000000002";
+const unavailableDatabaseError = () =>
+  Object.assign(new Error("Can't reach database server"), { code: "P1001" });
+
+vi.mock("../src/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === CUSTOMER_USER_ID
+          ? {
+              id: CUSTOMER_USER_ID,
+              email: "customer@example.com",
+              role: "CUSTOMER",
+              customerId: DEV_FIXTURE_CUSTOMERS[0].id,
+              customer: { status: "ACTIVE" },
+            }
+          : {
+              id: ADMIN_USER_ID,
+              email: "admin@example.com",
+              role: "ADMIN",
+              customerId: null,
+              customer: null,
+            },
+      ),
+    },
+    customer: {
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+    plan: {
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+    productVariant: {
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+    tax: {
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+    discount: {
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+    subscription: {
+      count: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findUnique: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+      findMany: vi.fn(async () => {
+        throw unavailableDatabaseError();
+      }),
+    },
+  },
+}));
+
+const adminToken = () =>
+  signToken({
+    userId: ADMIN_USER_ID,
+    email: "admin@example.com",
+    role: "ADMIN",
+    customerId: null,
+  });
+
+const customerToken = () =>
+  signToken({
+    userId: CUSTOMER_USER_ID,
+    email: "customer@example.com",
+    role: "CUSTOMER",
+    customerId: DEV_FIXTURE_CUSTOMERS[0].id,
+  });
+
+const authenticatedHeaders = (token: string, csrf = false) => {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
+  if (csrf) {
+    headers["X-Brightloop-Request"] = "1";
+    headers.Origin = "http://localhost:5173";
+  }
+  return headers;
+};
 
 describe("Subscription Management & Pricing API", () => {
   const customer = DEV_FIXTURE_CUSTOMERS[0];
@@ -19,7 +128,9 @@ describe("Subscription Management & Pricing API", () => {
   const discount = DEV_FIXTURE_DISCOUNTS[0]; // 10%
 
   it("should retrieve catalog preview for subscription creation", async () => {
-    const res = await request(app).get("/api/v1/subscriptions/catalog-preview");
+    const res = await request(app)
+      .get("/api/v1/subscriptions/catalog-preview")
+      .set(authenticatedHeaders(adminToken()));
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.customers.length).toBeGreaterThan(0);
@@ -39,6 +150,7 @@ describe("Subscription Management & Pricing API", () => {
 
     const res = await request(app)
       .post("/api/v1/subscriptions/calculate-pricing")
+      .set(authenticatedHeaders(adminToken(), true))
       .send(payload);
 
     expect(res.status).toBe(200);
@@ -80,6 +192,7 @@ describe("Subscription Management & Pricing API", () => {
 
     const res = await request(app)
       .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
       .send(payload);
 
     expect(res.status).toBe(201);
@@ -121,6 +234,7 @@ describe("Subscription Management & Pricing API", () => {
 
     const res = await request(app)
       .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
       .send(payload);
 
     expect(res.status).toBe(400);
@@ -137,6 +251,7 @@ describe("Subscription Management & Pricing API", () => {
 
     const res = await request(app)
       .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
       .send(payload);
 
     expect(res.status).toBe(400);
@@ -147,6 +262,7 @@ describe("Subscription Management & Pricing API", () => {
     // 1. Create DRAFT
     const createRes = await request(app)
       .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
       .send({
         customerId: customer.id,
         planId: plan.id,
@@ -158,14 +274,14 @@ describe("Subscription Management & Pricing API", () => {
     // 2. Confirm: DRAFT -> CONFIRMED
     const confirmRes = await request(app).post(
       `/api/v1/subscriptions/${subId}/confirm`,
-    );
+    ).set(authenticatedHeaders(adminToken(), true));
     expect(confirmRes.status).toBe(200);
     expect(confirmRes.body.data.status).toBe("CONFIRMED");
 
     // 3. Activate: CONFIRMED -> ACTIVE
     const activateRes = await request(app).post(
       `/api/v1/subscriptions/${subId}/activate`,
-    );
+    ).set(authenticatedHeaders(adminToken(), true));
     expect(activateRes.status).toBe(200);
     expect(activateRes.body.data.status).toBe("ACTIVE");
     expect(activateRes.body.data.nextBillingDate).toBeDefined();
@@ -173,6 +289,7 @@ describe("Subscription Management & Pricing API", () => {
     // 4. Close: ACTIVE -> CLOSED
     const closeRes = await request(app)
       .post(`/api/v1/subscriptions/${subId}/close`)
+      .set(authenticatedHeaders(adminToken(), true))
       .send({ reason: "Customer requested upgrade to enterprise" });
     expect(closeRes.status).toBe(200);
     expect(closeRes.body.data.status).toBe("CLOSED");
@@ -180,7 +297,7 @@ describe("Subscription Management & Pricing API", () => {
     // 5. Verify event history
     const eventsRes = await request(app).get(
       `/api/v1/subscriptions/${subId}/events`,
-    );
+    ).set(authenticatedHeaders(adminToken()));
     expect(eventsRes.status).toBe(200);
     const eventTypes = eventsRes.body.data.map((e: any) => e.eventType);
     expect(eventTypes).toContain("SUBSCRIPTION_CREATED");
@@ -193,6 +310,7 @@ describe("Subscription Management & Pricing API", () => {
     // Create DRAFT
     const createRes = await request(app)
       .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
       .send({
         customerId: customer.id,
         planId: plan.id,
@@ -203,17 +321,19 @@ describe("Subscription Management & Pricing API", () => {
     // Direct DRAFT -> ACTIVE is invalid!
     const directActivateRes = await request(app).post(
       `/api/v1/subscriptions/${subId}/activate`,
-    );
+    ).set(authenticatedHeaders(adminToken(), true));
     expect(directActivateRes.status).toBe(409);
     expect(directActivateRes.body.code).toBe("INVALID_STATUS_TRANSITION");
 
     // Close the draft
-    await request(app).post(`/api/v1/subscriptions/${subId}/close`);
+    await request(app)
+      .post(`/api/v1/subscriptions/${subId}/close`)
+      .set(authenticatedHeaders(adminToken(), true));
 
     // Cannot activate a CLOSED subscription
     const activateClosedRes = await request(app).post(
       `/api/v1/subscriptions/${subId}/activate`,
-    );
+    ).set(authenticatedHeaders(adminToken(), true));
     expect(activateClosedRes.status).toBe(409);
     expect(activateClosedRes.body.code).toBe("INVALID_STATUS_TRANSITION");
   });
@@ -221,6 +341,7 @@ describe("Subscription Management & Pricing API", () => {
   it("should list subscriptions with pagination and status filters", async () => {
     const listRes = await request(app)
       .get("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken()))
       .query({ page: 1, limit: 10 });
 
     expect(listRes.status).toBe(200);
@@ -234,11 +355,87 @@ describe("Subscription Management & Pricing API", () => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString();
     const res = await request(app)
       .get("/api/v1/subscriptions/for-billing")
+      .set(authenticatedHeaders(adminToken()))
       .query({ dueBefore: tomorrow });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
   });
-});
 
+  it("should reject unauthenticated and customer requests", async () => {
+    const unauthenticated = await request(app).get("/api/v1/subscriptions");
+    expect(unauthenticated.status).toBe(401);
+
+    const customer = await request(app)
+      .get("/api/v1/subscriptions")
+      .set(authenticatedHeaders(customerToken()));
+    expect(customer.status).toBe(403);
+  });
+
+  it("should reject invalid customer, plan, and variant references", async () => {
+    const invalidCustomer = await request(app)
+      .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
+      .send({
+        customerId: "00000000-0000-0000-0000-000000000099",
+        planId: plan.id,
+        lines: [{ variantId: variant1.id, quantity: 1 }],
+      });
+    expect(invalidCustomer.status).toBe(404);
+
+    const invalidPlan = await request(app)
+      .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
+      .send({
+        customerId: customer.id,
+        planId: "00000000-0000-0000-0000-000000000099",
+        lines: [{ variantId: variant1.id, quantity: 1 }],
+      });
+    expect(invalidPlan.status).toBe(404);
+
+    const invalidVariant = await request(app)
+      .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
+      .send({
+        customerId: customer.id,
+        planId: plan.id,
+        lines: [{ variantId: "00000000-0000-0000-0000-000000000099", quantity: 1 }],
+      });
+    expect(invalidVariant.status).toBe(404);
+  });
+
+  it("should reject inactive plans and variants", async () => {
+    const inactivePlan = vi
+      .spyOn(subscriptionRepository, "findPlanById")
+      .mockResolvedValue({ ...plan, status: "INACTIVE" });
+
+    const planResponse = await request(app)
+      .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
+      .send({
+        customerId: customer.id,
+        planId: plan.id,
+        lines: [{ variantId: variant1.id, quantity: 1 }],
+      });
+    expect(planResponse.status).toBe(400);
+    expect(planResponse.body.message).toContain("Inactive subscription plans");
+    inactivePlan.mockRestore();
+
+    const inactiveVariant = vi
+      .spyOn(subscriptionRepository, "findVariantById")
+      .mockResolvedValue({ ...variant1, status: "INACTIVE" });
+
+    const variantResponse = await request(app)
+      .post("/api/v1/subscriptions")
+      .set(authenticatedHeaders(adminToken(), true))
+      .send({
+        customerId: customer.id,
+        planId: plan.id,
+        lines: [{ variantId: variant1.id, quantity: 1 }],
+      });
+    expect(variantResponse.status).toBe(400);
+    expect(variantResponse.body.message).toContain("Inactive products");
+    inactiveVariant.mockRestore();
+  });
+});

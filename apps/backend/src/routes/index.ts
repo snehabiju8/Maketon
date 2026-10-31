@@ -13,6 +13,7 @@ import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 import authRoutes from "../modules/auth/auth.routes";
 import usersRoutes from "../modules/users/users.routes";
 import customersRoutes from "../modules/customers/customers.routes";
+import subscriptionsRouter from "../modules/subscriptions/subscriptions.routes";
 
 const router = Router();
 
@@ -72,6 +73,7 @@ router.use("/plans", plansRouter);
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
 router.use("/customers", customersRoutes);
+router.use("/subscriptions", subscriptionsRouter);
 // Billing, invoices, payments and dashboard (Member 4)
 router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
 router.use("/invoices", invoicesRoutes);
@@ -79,4 +81,3 @@ router.use("/payments", paymentsRouter);
 router.use("/dashboard", dashboardRoutes);
 
 export default router;
-
