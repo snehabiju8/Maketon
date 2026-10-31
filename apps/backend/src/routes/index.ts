@@ -3,8 +3,16 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
-// Member 3: Subscription Management & Pricing
-import subscriptionRoutes from "../modules/subscriptions/subscriptions.routes";
+import productsRouter from "../modules/products/products.routes";
+import plansRouter from "../modules/plans/plans.routes";
+import invoicesRoutes from "../modules/invoices/invoices.routes";
+import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
+import dashboardRoutes from "../modules/dashboard/dashboard.routes";
+
+// Module routes
+import authRoutes from "../modules/auth/auth.routes";
+import usersRoutes from "../modules/users/users.routes";
+import customersRoutes from "../modules/customers/customers.routes";
 
 const router = Router();
 
@@ -56,7 +64,19 @@ router.get(
   }),
 );
 
-// Member 3: Subscription Management & Pricing
-router.use("/subscriptions", subscriptionRoutes);
+// Products, Variants, and Plans modules (Member 2)
+router.use("/products", productsRouter);
+router.use("/plans", plansRouter);
+
+// Register Module 1 Routes
+router.use("/auth", authRoutes);
+router.use("/users", usersRoutes);
+router.use("/customers", customersRoutes);
+// Billing, invoices, payments and dashboard (Member 4)
+router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
+router.use("/invoices", invoicesRoutes);
+router.use("/payments", paymentsRouter);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;
+
