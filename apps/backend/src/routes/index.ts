@@ -3,6 +3,9 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import invoicesRoutes from "../modules/invoices/invoices.routes";
+import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
+import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 
 const router = Router();
 
@@ -50,5 +53,11 @@ router.get(
     return sendSuccess(res, data, "Brightloop API is running", 200);
   }),
 );
+
+// Billing, invoices, payments and dashboard (Member 4)
+router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
+router.use("/invoices", invoicesRoutes);
+router.use("/payments", paymentsRouter);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;
