@@ -25,10 +25,10 @@ const RootRedirect: React.FC = () => {
   }
 
   if (user.role === "CUSTOMER") {
-    return <Navigate to="/portal/profile" replace />;
+    return <Navigate to="/portal" replace />;
   }
 
-  return <Navigate to="/admin/customers" replace />;
+  return <Navigate to="/customers" replace />;
 };
 
 export const AppRoutes: React.FC = () => {
@@ -47,12 +47,12 @@ export const AppRoutes: React.FC = () => {
       <Route element={<DashboardLayout />}>
         {/* Admin and Internal Staff routes */}
         <Route element={<ProtectedRoute allowedRoles={["ADMIN", "INTERNAL"]} />}>
-          <Route path="/admin/customers" element={<CustomersPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
         </Route>
 
         {/* Customer Self-Service Portal routes */}
         <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
-          <Route path="/portal/profile" element={<CustomerProfilePage />} />
+          <Route path="/portal" element={<CustomerProfilePage />} />
         </Route>
       </Route>
 
