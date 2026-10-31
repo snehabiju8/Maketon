@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { customersApi, CustomersListResponse } from "../api/customers.api";
 import { Customer } from "../../auth/types";
+import { ApiError } from "../../../lib/api-client";
 
 export const CustomersPage: React.FC = () => {
   const [data, setData] = useState<CustomersListResponse | null>(null);
@@ -8,6 +9,7 @@ export const CustomersPage: React.FC = () => {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // New customer form state
   const [newName, setNewName] = useState("");
@@ -19,8 +21,14 @@ export const CustomersPage: React.FC = () => {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await customersApi.list({ page, limit: 10, search });
       setData(res);
+    } catch (error) {
+      setData(null);
+      setLoadError(
+        error instanceof ApiError ? error.message : "Failed to load customers. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -45,9 +53,13 @@ export const CustomersPage: React.FC = () => {
       setNewEmail("");
       setNewPhone("");
       setNewAddress("");
-      fetchCustomers();
-    } catch {
-      setCreateError("Failed to create customer profile. Please check inputs.");
+      await fetchCustomers();
+    } catch (error) {
+      setCreateError(
+        error instanceof ApiError
+          ? error.message
+          : "Failed to create customer profile. Please check inputs.",
+      );
     }
   };
 
@@ -83,7 +95,19 @@ export const CustomersPage: React.FC = () => {
 
       {/* Customer Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {loading ? (
+        {loadError ? (
+          <div className="p-12 text-center text-red-600">
+            <p className="text-base font-semibold">Unable to load customers</p>
+            <p className="text-sm mt-1">{loadError}</p>
+            <button
+              type="button"
+              onClick={fetchCustomers}
+              className="mt-4 px-3 py-1.5 rounded border border-red-300 text-sm hover:bg-red-50"
+            >
+              Retry
+            </button>
+          </div>
+        ) : loading ? (
           <div className="p-12 text-center text-gray-500">
             <div className="animate-spin inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full mb-2"></div>
             <p className="text-sm">Loading customer directory...</p>

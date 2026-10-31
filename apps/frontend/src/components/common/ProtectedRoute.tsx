@@ -27,9 +27,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, ch
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // If unauthorized, redirect to appropriate home based on role
     if (user.role === "CUSTOMER") {
-      return <Navigate to="/portal/profile" replace />;
+      return <Navigate to="/portal" replace />;
     }
-    return <Navigate to="/admin/customers" replace />;
+    return <Navigate to="/customers" replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

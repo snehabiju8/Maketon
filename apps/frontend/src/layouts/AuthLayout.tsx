@@ -16,9 +16,9 @@ export const AuthLayout: React.FC = () => {
   // If already logged in, redirect away from login/register
   if (user) {
     if (user.role === "CUSTOMER") {
-      return <Navigate to="/portal/profile" replace />;
+      return <Navigate to="/portal" replace />;
     }
-    return <Navigate to="/admin/customers" replace />;
+    return <Navigate to="/customers" replace />;
   }
 
   return (

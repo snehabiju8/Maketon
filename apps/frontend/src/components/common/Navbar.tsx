@@ -33,7 +33,7 @@ export const Navbar: React.FC = () => {
               <div className="hidden md:flex space-x-4">
                 {(user.role === "ADMIN" || user.role === "INTERNAL") && (
                   <Link
-                    to="/admin/customers"
+                    to="/customers"
                     className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition"
                   >
                     Customers
@@ -41,7 +41,7 @@ export const Navbar: React.FC = () => {
                 )}
                 {user.role === "CUSTOMER" && (
                   <Link
-                    to="/portal/profile"
+                    to="/portal"
                     className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition"
                   >
                     My Profile
