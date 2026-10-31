@@ -14,7 +14,7 @@ router.post(
   "/register",
   authRateLimiter,
   csrfProtection,
-  validateRequest({ body: registerSchema }),
+  validateRequest({ body: registerSchema.shape.body }),
   asyncHandler(authController.register),
 );
 
@@ -22,7 +22,7 @@ router.post(
   "/login",
   authRateLimiter,
   csrfProtection,
-  validateRequest({ body: loginSchema }),
+  validateRequest({ body: loginSchema.shape.body }),
   asyncHandler(authController.login),
 );
 

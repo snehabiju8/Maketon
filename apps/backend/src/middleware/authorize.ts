@@ -26,6 +26,18 @@ export const authorize = (...allowedRoles: Role[]) => {
   };
 };
 
+const READ_METHODS = ["GET", "HEAD", "OPTIONS"];
+
+/**
+ * Applies `authorize(...allowedRoles)` to state-changing requests only, so a router can let a
+ * wider set of roles read while restricting writes (e.g. staff view the catalog, admins edit it).
+ */
+export const authorizeWrites = (...allowedRoles: Role[]) => {
+  const check = authorize(...allowedRoles);
+  return (req: Request, res: Response, next: NextFunction): void =>
+    READ_METHODS.includes(req.method) ? next() : check(req, res, next);
+};
+
 /**
  * Customer Tenant Isolation Assertion
  * For CUSTOMER role, targetCustomerId must strictly match req.user.customerId.

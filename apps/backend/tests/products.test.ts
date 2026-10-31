@@ -3,6 +3,16 @@ import request from "supertest";
 import { Prisma } from "@prisma/client";
 
 const mockPrisma = vi.hoisted(() => ({
+  // authenticate() re-reads the user; the role is encoded in the last digit of the test user id
+  user: {
+    findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      email: "user@test.io",
+      role: ({ "1": "ADMIN", "2": "INTERNAL", "3": "CUSTOMER" } as const)[where.id.slice(-1) as "1" | "2" | "3"],
+      customerId: null,
+      customer: null,
+    })),
+  },
   product: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -24,6 +34,33 @@ vi.mock("../src/lib/prisma", () => ({
 }));
 
 import { app } from "../src/app";
+import { signToken } from "../src/lib/jwt";
+
+const tokenFor = (role: "ADMIN" | "INTERNAL" | "CUSTOMER") =>
+  signToken({
+    userId: `00000000-0000-0000-0000-00000000000${{ ADMIN: 1, INTERNAL: 2, CUSTOMER: 3 }[role]}`,
+    email: "user@test.io",
+    role,
+  });
+// Catalog routes require authentication; writes also require ADMIN and the CSRF headers.
+const authHeaders = (role: "ADMIN" | "INTERNAL" | "CUSTOMER" = "ADMIN") => ({
+  Authorization: `Bearer ${tokenFor(role)}`,
+  Origin: "http://localhost:5173",
+  "X-Brightloop-Request": "1",
+});
+const api = () => request.agent(app).set(authHeaders());
+
+describe("products access control", () => {
+  it("requires authentication", async () => {
+    expect((await request(app).get("/api/v1/products")).status).toBe(401);
+  });
+  it("lets staff read but not write, and forbids customers", async () => {
+    expect((await request(app).get("/api/v1/products").set(authHeaders("CUSTOMER"))).status).toBe(403);
+    const write = await request(app).post("/api/v1/products").set(authHeaders("INTERNAL")).send({});
+    expect(write.status).toBe(403);
+  });
+});
+
 
 describe("Products & Variants Module", () => {
   const validProductId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
@@ -48,7 +85,7 @@ describe("Products & Variants Module", () => {
       ];
       mockPrisma.product.findMany.mockResolvedValue(mockProducts);
 
-      const res = await request(app).get("/api/v1/products");
+      const res = await api().get("/api/v1/products");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -59,7 +96,7 @@ describe("Products & Variants Module", () => {
     it("should filter by status query parameter", async () => {
       mockPrisma.product.findMany.mockResolvedValue([]);
 
-      const res = await request(app).get("/api/v1/products?status=INACTIVE");
+      const res = await api().get("/api/v1/products?status=INACTIVE");
 
       expect(res.status).toBe(200);
       expect(mockPrisma.product.findMany).toHaveBeenCalledWith(
@@ -70,7 +107,7 @@ describe("Products & Variants Module", () => {
     });
 
     it("should reject invalid status query parameter with 400", async () => {
-      const res = await request(app).get("/api/v1/products?status=INVALID_STATUS");
+      const res = await api().get("/api/v1/products?status=INVALID_STATUS");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -94,7 +131,7 @@ describe("Products & Variants Module", () => {
       };
       mockPrisma.product.create.mockResolvedValue(createdProduct);
 
-      const res = await request(app).post("/api/v1/products").send(newProduct);
+      const res = await api().post("/api/v1/products").send(newProduct);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -103,7 +140,7 @@ describe("Products & Variants Module", () => {
     });
 
     it("should reject product creation without a name", async () => {
-      const res = await request(app).post("/api/v1/products").send({
+      const res = await api().post("/api/v1/products").send({
         description: "Missing name",
       });
 
@@ -124,7 +161,7 @@ describe("Products & Variants Module", () => {
       };
       mockPrisma.product.findUnique.mockResolvedValue(mockProduct);
 
-      const res = await request(app).get(`/api/v1/products/${validProductId}`);
+      const res = await api().get(`/api/v1/products/${validProductId}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -134,7 +171,7 @@ describe("Products & Variants Module", () => {
     it("should return 404 when product is not found", async () => {
       mockPrisma.product.findUnique.mockResolvedValue(null);
 
-      const res = await request(app).get(`/api/v1/products/${validProductId}`);
+      const res = await api().get(`/api/v1/products/${validProductId}`);
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -142,7 +179,7 @@ describe("Products & Variants Module", () => {
     });
 
     it("should return 400 for invalid UUID", async () => {
-      const res = await request(app).get("/api/v1/products/invalid-uuid");
+      const res = await api().get("/api/v1/products/invalid-uuid");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -166,7 +203,7 @@ describe("Products & Variants Module", () => {
       mockPrisma.product.findUnique.mockResolvedValue(existingProduct);
       mockPrisma.product.update.mockResolvedValue(updatedProduct);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/products/${validProductId}`)
         .send({ name: "Updated Name" });
 
@@ -175,7 +212,7 @@ describe("Products & Variants Module", () => {
     });
 
     it("should reject update with empty body", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/products/${validProductId}`)
         .send({});
 
@@ -204,7 +241,7 @@ describe("Products & Variants Module", () => {
         },
       ]);
 
-      const res = await request(app).get(`/api/v1/products/${validProductId}/variants`);
+      const res = await api().get(`/api/v1/products/${validProductId}/variants`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -214,7 +251,7 @@ describe("Products & Variants Module", () => {
     it("should return 404 if parent product not found", async () => {
       mockPrisma.product.findUnique.mockResolvedValue(null);
 
-      const res = await request(app).get(`/api/v1/products/${validProductId}/variants`);
+      const res = await api().get(`/api/v1/products/${validProductId}/variants`);
 
       expect(res.status).toBe(404);
       expect(res.body.code).toBe("NOT_FOUND");
@@ -240,7 +277,7 @@ describe("Products & Variants Module", () => {
       };
       mockPrisma.productVariant.create.mockResolvedValue(createdVariant);
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/v1/products/${validProductId}/variants`)
         .send({
           name: "Enterprise",
@@ -260,7 +297,7 @@ describe("Products & Variants Module", () => {
         variants: [],
       });
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/v1/products/${validProductId}/variants`)
         .send({
           name: "Enterprise",
@@ -283,7 +320,7 @@ describe("Products & Variants Module", () => {
         sku: "DUPLICATE-SKU",
       });
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/v1/products/${validProductId}/variants`)
         .send({
           name: "Enterprise",
@@ -296,7 +333,7 @@ describe("Products & Variants Module", () => {
     });
 
     it("should reject negative default price with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/v1/products/${validProductId}/variants`)
         .send({
           name: "Enterprise",
@@ -321,7 +358,7 @@ describe("Products & Variants Module", () => {
       };
       mockPrisma.productVariant.findUnique.mockResolvedValue(mockVariant);
 
-      const res = await request(app).get(`/api/v1/products/variants/${validVariantId}`);
+      const res = await api().get(`/api/v1/products/variants/${validVariantId}`);
 
       expect(res.status).toBe(200);
       expect(res.body.data.id).toBe(validVariantId);
@@ -331,7 +368,7 @@ describe("Products & Variants Module", () => {
     it("should return 404 when variant is not found", async () => {
       mockPrisma.productVariant.findUnique.mockResolvedValue(null);
 
-      const res = await request(app).get(`/api/v1/products/variants/${validVariantId}`);
+      const res = await api().get(`/api/v1/products/variants/${validVariantId}`);
 
       expect(res.status).toBe(404);
       expect(res.body.code).toBe("NOT_FOUND");
@@ -357,7 +394,7 @@ describe("Products & Variants Module", () => {
       mockPrisma.productVariant.findUnique.mockResolvedValue(existing);
       mockPrisma.productVariant.update.mockResolvedValue(updated);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/products/variants/${validVariantId}`)
         .send({
           name: "New Variant",
@@ -371,7 +408,7 @@ describe("Products & Variants Module", () => {
     it("should return 404 when updating non-existent variant", async () => {
       mockPrisma.productVariant.findUnique.mockResolvedValue(null);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/products/variants/${validVariantId}`)
         .send({ name: "Does Not Exist" });
 

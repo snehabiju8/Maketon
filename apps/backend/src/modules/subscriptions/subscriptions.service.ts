@@ -3,7 +3,6 @@ import { Prisma, SubscriptionStatus, BillingInterval } from "@prisma/client";
 import { AppError } from "../../utils/app-error";
 import {
   CreateSubscriptionInput,
-  UpdateSubscriptionInput,
   SubscriptionDetailsDto,
   SubscriptionQueryFilters,
   PaginatedSubscriptionsDto,
@@ -263,7 +262,8 @@ export class SubscriptionService {
 
   /**
    * Transition: CONFIRMED -> ACTIVE
-   * Sets nextBillingDate = startDate (if in the future, or now)
+   * Keeps nextBillingDate, initializing it to startDate if unset (PRD FR-S8). Billing backfills
+   * any periods that are already due, so the first invoice covers a full period.
    */
   async activateSubscription(
     id: string,
@@ -278,9 +278,7 @@ export class SubscriptionService {
       );
     }
 
-    // Verify next billing date is initialized
-    const startDate = new Date(sub.startDate);
-    const nextBillingDate = startDate > new Date() ? startDate : new Date();
+    const nextBillingDate = new Date(sub.nextBillingDate ?? sub.startDate);
 
     return await this.repo.updateStatus(
       id,

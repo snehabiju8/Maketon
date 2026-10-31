@@ -1,19 +1,16 @@
 import { InvoiceStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { subscriptionService } from "../subscriptions/subscriptions.service";
 import { ListInvoicesQuery } from "./invoices.validation";
 
 type Db = Prisma.TransactionClient;
 
-// Subscription reads below are the billing integration point with the subscriptions module.
-// Replace with a subscriptions service method once that module exposes one.
-
+// Due subscriptions are discovered via the subscriptions service (SUBSCRIPTION_API_CONTRACT 5).
+// Inside the billing transaction the row is then locked and re-read directly, which the
+// service cannot do because it does not accept a transaction client.
 export const findDueSubscriptionIds = async (now: Date): Promise<string[]> => {
-  const rows = await prisma.subscription.findMany({
-    where: { status: "ACTIVE", nextBillingDate: { lte: now } },
-    select: { id: true },
-    orderBy: { nextBillingDate: "asc" },
-  });
-  return rows.map((row) => row.id);
+  const due = await subscriptionService.getDueSubscriptionsForBilling(now);
+  return due.map((subscription) => subscription.id);
 };
 
 /** Row-locks the subscription for the rest of the transaction so concurrent runs serialize. */

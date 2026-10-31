@@ -5,6 +5,8 @@ const api = axios.create({
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
+    // Required by the backend CSRF check on state-changing requests (see api-client.ts)
+    'X-Brightloop-Request': '1',
   },
 });
 

@@ -1,6 +1,7 @@
 import { Prisma, SubscriptionStatus, BillingInterval } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
+import { env } from "../../config/env";
 import {
   SubscriptionDetailsDto,
   SubscriptionQueryFilters,
@@ -162,11 +163,13 @@ export class SubscriptionRepository {
     try {
       return await prismaAction();
     } catch (err: any) {
-      // If error is DB connection related, switch to in-memory fallback
+      // In-memory fallback is for isolated tests only. Elsewhere a transient outage (e.g. a Neon
+      // compute waking up) must surface as an error, not silently store data in process memory.
       if (
-        err.message?.includes("Can't reach database") ||
-        err.code === "P1001" ||
-        err.code === "P1000"
+        env.NODE_ENV === "test" &&
+        (err.message?.includes("Can't reach database") ||
+          err.code === "P1001" ||
+          err.code === "P1000")
       ) {
         logger.warn(
           "PostgreSQL database is currently unavailable; operating subscription repository in standalone memory mode.",

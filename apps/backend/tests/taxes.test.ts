@@ -3,6 +3,16 @@ import request from "supertest";
 import { Prisma } from "@prisma/client";
 
 const mockPrisma = vi.hoisted(() => ({
+  // authenticate() re-reads the user; the role is encoded in the last digit of the test user id
+  user: {
+    findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      email: "user@test.io",
+      role: ({ "1": "ADMIN", "2": "INTERNAL", "3": "CUSTOMER" } as const)[where.id.slice(-1) as "1" | "2" | "3"],
+      customerId: null,
+      customer: null,
+    })),
+  },
   tax: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -18,6 +28,33 @@ vi.mock("../src/lib/prisma", () => ({
 }));
 
 import { app } from "../src/app";
+import { signToken } from "../src/lib/jwt";
+
+const tokenFor = (role: "ADMIN" | "INTERNAL" | "CUSTOMER") =>
+  signToken({
+    userId: `00000000-0000-0000-0000-00000000000${{ ADMIN: 1, INTERNAL: 2, CUSTOMER: 3 }[role]}`,
+    email: "user@test.io",
+    role,
+  });
+// Catalog routes require authentication; writes also require ADMIN and the CSRF headers.
+const authHeaders = (role: "ADMIN" | "INTERNAL" | "CUSTOMER" = "ADMIN") => ({
+  Authorization: `Bearer ${tokenFor(role)}`,
+  Origin: "http://localhost:5173",
+  "X-Brightloop-Request": "1",
+});
+const api = () => request.agent(app).set(authHeaders());
+
+describe("taxes access control", () => {
+  it("requires authentication", async () => {
+    expect((await request(app).get("/api/v1/taxes")).status).toBe(401);
+  });
+  it("lets staff read but not write, and forbids customers", async () => {
+    expect((await request(app).get("/api/v1/taxes").set(authHeaders("CUSTOMER"))).status).toBe(403);
+    const write = await request(app).post("/api/v1/taxes").set(authHeaders("INTERNAL")).send({});
+    expect(write.status).toBe(403);
+  });
+});
+
 
 describe("Taxes Module (Mocked Database)", () => {
   const validTaxId = "c1eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
@@ -39,7 +76,7 @@ describe("Taxes Module (Mocked Database)", () => {
       ];
       mockPrisma.tax.findMany.mockResolvedValue(mockTaxes);
 
-      const res = await request(app).get("/api/v1/taxes");
+      const res = await api().get("/api/v1/taxes");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -54,7 +91,7 @@ describe("Taxes Module (Mocked Database)", () => {
     it("should filter by isActive=true query parameter", async () => {
       mockPrisma.tax.findMany.mockResolvedValue([]);
 
-      const res = await request(app).get("/api/v1/taxes?isActive=true");
+      const res = await api().get("/api/v1/taxes?isActive=true");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -67,7 +104,7 @@ describe("Taxes Module (Mocked Database)", () => {
     it("should filter by isActive=false query parameter", async () => {
       mockPrisma.tax.findMany.mockResolvedValue([]);
 
-      const res = await request(app).get("/api/v1/taxes?isActive=false");
+      const res = await api().get("/api/v1/taxes?isActive=false");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -78,7 +115,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject invalid isActive query parameter with 400", async () => {
-      const res = await request(app).get("/api/v1/taxes?isActive=invalid");
+      const res = await api().get("/api/v1/taxes?isActive=invalid");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -102,7 +139,7 @@ describe("Taxes Module (Mocked Database)", () => {
       };
       mockPrisma.tax.create.mockResolvedValue(createdTax);
 
-      const res = await request(app).post("/api/v1/taxes").send(taxPayload);
+      const res = await api().post("/api/v1/taxes").send(taxPayload);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -130,7 +167,7 @@ describe("Taxes Module (Mocked Database)", () => {
       };
       mockPrisma.tax.create.mockResolvedValue(createdTax);
 
-      const res = await request(app).post("/api/v1/taxes").send(minimalPayload);
+      const res = await api().post("/api/v1/taxes").send(minimalPayload);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -157,7 +194,7 @@ describe("Taxes Module (Mocked Database)", () => {
       };
       mockPrisma.tax.create.mockResolvedValue(createdTax);
 
-      const res = await request(app).post("/api/v1/taxes").send(stringRatePayload);
+      const res = await api().post("/api/v1/taxes").send(stringRatePayload);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -179,7 +216,7 @@ describe("Taxes Module (Mocked Database)", () => {
         createdAt: new Date().toISOString(),
       });
 
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Exempt Tax",
         rate: 0,
       });
@@ -197,7 +234,7 @@ describe("Taxes Module (Mocked Database)", () => {
         createdAt: new Date().toISOString(),
       });
 
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Luxury Tax",
         rate: 999.99,
       });
@@ -207,7 +244,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject missing name with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         rate: 18,
       });
 
@@ -217,7 +254,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject blank or whitespace-only name with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "     ",
         rate: 18,
       });
@@ -227,7 +264,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject missing rate with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "GST 18%",
       });
 
@@ -236,7 +273,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject negative rates with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Negative Tax",
         rate: -5,
       });
@@ -246,7 +283,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject rates exceeding 999.99% with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Over上限 Tax",
         rate: 1000,
       });
@@ -256,7 +293,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject rates with more than 2 decimal places with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Precision Tax",
         rate: 18.125,
       });
@@ -266,7 +303,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject non-numeric string rate with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Invalid Rate Tax",
         rate: "eighteen-percent",
       });
@@ -276,7 +313,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject invalid non-boolean isActive value with 400", async () => {
-      const res = await request(app).post("/api/v1/taxes").send({
+      const res = await api().post("/api/v1/taxes").send({
         name: "Bad Bool Tax",
         rate: 10,
         isActive: "not-a-boolean",
@@ -298,7 +335,7 @@ describe("Taxes Module (Mocked Database)", () => {
       };
       mockPrisma.tax.findUnique.mockResolvedValue(mockTax);
 
-      const res = await request(app).get(`/api/v1/taxes/${validTaxId}`);
+      const res = await api().get(`/api/v1/taxes/${validTaxId}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -309,7 +346,7 @@ describe("Taxes Module (Mocked Database)", () => {
     it("should return 404 when tax record is not found", async () => {
       mockPrisma.tax.findUnique.mockResolvedValue(null);
 
-      const res = await request(app).get(`/api/v1/taxes/${validTaxId}`);
+      const res = await api().get(`/api/v1/taxes/${validTaxId}`);
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -317,7 +354,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject non-UUID id param with 400", async () => {
-      const res = await request(app).get("/api/v1/taxes/invalid-uuid-1234");
+      const res = await api().get("/api/v1/taxes/invalid-uuid-1234");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -343,7 +380,7 @@ describe("Taxes Module (Mocked Database)", () => {
       mockPrisma.tax.findUnique.mockResolvedValue(existingTax);
       mockPrisma.tax.update.mockResolvedValue(updatedTax);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ name: "Updated Tax Name", isActive: false });
 
@@ -371,7 +408,7 @@ describe("Taxes Module (Mocked Database)", () => {
         rate: new Prisma.Decimal("12.00"),
       });
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ rate: 12.0 });
 
@@ -386,7 +423,7 @@ describe("Taxes Module (Mocked Database)", () => {
     it("should return 404 when updating non-existent tax", async () => {
       mockPrisma.tax.findUnique.mockResolvedValue(null);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ name: "New Tax" });
 
@@ -396,7 +433,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject empty update body with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({});
 
@@ -406,7 +443,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject blank name in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ name: "    " });
 
@@ -415,7 +452,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject negative rate in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ rate: -1 });
 
@@ -424,7 +461,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject rate exceeding 999.99 in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ rate: 1000 });
 
@@ -433,7 +470,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject rate with more than 2 decimal places in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ rate: 5.555 });
 
@@ -442,7 +479,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject invalid isActive in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/taxes/${validTaxId}`)
         .send({ isActive: "disabled" });
 
@@ -451,7 +488,7 @@ describe("Taxes Module (Mocked Database)", () => {
     });
 
     it("should reject invalid UUID in params for update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch("/api/v1/taxes/invalid-uuid")
         .send({ name: "New Name" });
 

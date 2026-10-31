@@ -18,7 +18,7 @@ export const subscriptionsApi = {
     page?: number;
     limit?: number;
   }): Promise<SubscriptionListResponse> {
-    const res = await api.get('/subscriptions', { params });
+    const res = await api.get('/v1/subscriptions', { params });
     return res.data.data;
   },
 
@@ -26,7 +26,7 @@ export const subscriptionsApi = {
    * Fetch single subscription details by ID
    */
   async getById(id: string): Promise<Subscription> {
-    const res = await api.get(`/subscriptions/${id}`);
+    const res = await api.get(`/v1/subscriptions/${id}`);
     return res.data.data;
   },
 
@@ -34,7 +34,7 @@ export const subscriptionsApi = {
    * Create a new subscription
    */
   async create(payload: CreateSubscriptionPayload): Promise<Subscription> {
-    const res = await api.post('/subscriptions', payload);
+    const res = await api.post('/v1/subscriptions', payload);
     return res.data.data;
   },
 
@@ -42,7 +42,7 @@ export const subscriptionsApi = {
    * Confirm a draft subscription: DRAFT -> CONFIRMED
    */
   async confirm(id: string): Promise<Subscription> {
-    const res = await api.post(`/subscriptions/${id}/confirm`);
+    const res = await api.post(`/v1/subscriptions/${id}/confirm`);
     return res.data.data;
   },
 
@@ -50,7 +50,7 @@ export const subscriptionsApi = {
    * Activate a confirmed subscription: CONFIRMED -> ACTIVE
    */
   async activate(id: string): Promise<Subscription> {
-    const res = await api.post(`/subscriptions/${id}/activate`);
+    const res = await api.post(`/v1/subscriptions/${id}/activate`);
     return res.data.data;
   },
 
@@ -58,7 +58,7 @@ export const subscriptionsApi = {
    * Close a subscription: DRAFT | CONFIRMED | ACTIVE -> CLOSED
    */
   async close(id: string, reason?: string): Promise<Subscription> {
-    const res = await api.post(`/subscriptions/${id}/close`, { reason });
+    const res = await api.post(`/v1/subscriptions/${id}/close`, { reason });
     return res.data.data;
   },
 
@@ -70,7 +70,7 @@ export const subscriptionsApi = {
     taxRate?: number | string | null;
     discountPercentage?: number | string | null;
   }): Promise<SubscriptionPricing> {
-    const res = await api.post('/subscriptions/calculate-pricing', payload);
+    const res = await api.post('/v1/subscriptions/calculate-pricing', payload);
     return res.data.data;
   },
 
@@ -78,7 +78,7 @@ export const subscriptionsApi = {
    * Fetch catalog preview (customers, plans, product variants, taxes, discounts)
    */
   async getCatalogPreview(): Promise<CatalogPreview> {
-    const res = await api.get('/subscriptions/catalog-preview');
+    const res = await api.get('/v1/subscriptions/catalog-preview');
     return res.data.data;
   },
 };

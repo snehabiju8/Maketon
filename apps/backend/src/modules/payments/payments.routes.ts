@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
+import { csrfProtection } from "../../middleware/csrf";
 import { asyncHandler } from "../../utils/async-handler";
 import * as paymentsController from "./payments.controller";
 
@@ -13,4 +14,4 @@ paymentsRouter.get("/", asyncHandler(paymentsController.listPayments));
 export const invoicePaymentsRouter = Router({ mergeParams: true });
 invoicePaymentsRouter.use(authenticate, authorize("ADMIN", "INTERNAL"));
 invoicePaymentsRouter.get("/", asyncHandler(paymentsController.listInvoicePayments));
-invoicePaymentsRouter.post("/", asyncHandler(paymentsController.recordPayment));
+invoicePaymentsRouter.post("/", csrfProtection, asyncHandler(paymentsController.recordPayment));

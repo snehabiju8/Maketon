@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { signToken } from "../src/lib/jwt";
 import { app } from "../src/app";

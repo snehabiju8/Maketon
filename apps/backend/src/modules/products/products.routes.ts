@@ -1,4 +1,8 @@
 import { Router } from "express";
+import { Role } from "@prisma/client";
+import { authenticate } from "../../middleware/authenticate";
+import { authorize, authorizeWrites } from "../../middleware/authorize";
+import { csrfProtection } from "../../middleware/csrf";
 import { productsController } from "./products.controller";
 import { validateRequest } from "../../middleware/validate";
 import {
@@ -14,6 +18,9 @@ import {
 } from "./products.validation";
 
 const router = Router();
+
+// Admins and staff can read the catalog; only admins can change it (PRD roles).
+router.use(authenticate, authorize(Role.ADMIN, Role.INTERNAL), csrfProtection, authorizeWrites(Role.ADMIN));
 
 // 1. Product Variant Endpoints by Variant ID
 // Registered first to prevent /variants/:id from matching /:id

@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 
 const mockPrisma = vi.hoisted(() => ({
+  // authenticate() re-reads the user; the role is encoded in the last digit of the test user id
+  user: {
+    findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      email: "user@test.io",
+      role: ({ "1": "ADMIN", "2": "INTERNAL", "3": "CUSTOMER" } as const)[where.id.slice(-1) as "1" | "2" | "3"],
+      customerId: null,
+      customer: null,
+    })),
+  },
   plan: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -17,6 +27,33 @@ vi.mock("../src/lib/prisma", () => ({
 }));
 
 import { app } from "../src/app";
+import { signToken } from "../src/lib/jwt";
+
+const tokenFor = (role: "ADMIN" | "INTERNAL" | "CUSTOMER") =>
+  signToken({
+    userId: `00000000-0000-0000-0000-00000000000${{ ADMIN: 1, INTERNAL: 2, CUSTOMER: 3 }[role]}`,
+    email: "user@test.io",
+    role,
+  });
+// Catalog routes require authentication; writes also require ADMIN and the CSRF headers.
+const authHeaders = (role: "ADMIN" | "INTERNAL" | "CUSTOMER" = "ADMIN") => ({
+  Authorization: `Bearer ${tokenFor(role)}`,
+  Origin: "http://localhost:5173",
+  "X-Brightloop-Request": "1",
+});
+const api = () => request.agent(app).set(authHeaders());
+
+describe("plans access control", () => {
+  it("requires authentication", async () => {
+    expect((await request(app).get("/api/v1/plans")).status).toBe(401);
+  });
+  it("lets staff read but not write, and forbids customers", async () => {
+    expect((await request(app).get("/api/v1/plans").set(authHeaders("CUSTOMER"))).status).toBe(403);
+    const write = await request(app).post("/api/v1/plans").set(authHeaders("INTERNAL")).send({});
+    expect(write.status).toBe(403);
+  });
+});
+
 
 describe("Plans Module (Mocked Database)", () => {
   const validPlanId = "a1eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
@@ -41,7 +78,7 @@ describe("Plans Module (Mocked Database)", () => {
       ];
       mockPrisma.plan.findMany.mockResolvedValue(mockPlans);
 
-      const res = await request(app).get("/api/v1/plans");
+      const res = await api().get("/api/v1/plans");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -56,7 +93,7 @@ describe("Plans Module (Mocked Database)", () => {
     it("should filter by status query parameter", async () => {
       mockPrisma.plan.findMany.mockResolvedValue([]);
 
-      const res = await request(app).get("/api/v1/plans?status=INACTIVE");
+      const res = await api().get("/api/v1/plans?status=INACTIVE");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -67,7 +104,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject invalid status query parameter with 400", async () => {
-      const res = await request(app).get("/api/v1/plans?status=ARCHIVED");
+      const res = await api().get("/api/v1/plans?status=ARCHIVED");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -92,7 +129,7 @@ describe("Plans Module (Mocked Database)", () => {
       };
       mockPrisma.plan.create.mockResolvedValue(createdPlan);
 
-      const res = await request(app).post("/api/v1/plans").send(planPayload);
+      const res = await api().post("/api/v1/plans").send(planPayload);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -126,7 +163,7 @@ describe("Plans Module (Mocked Database)", () => {
       };
       mockPrisma.plan.create.mockResolvedValue(createdPlan);
 
-      const res = await request(app).post("/api/v1/plans").send(minimalPayload);
+      const res = await api().post("/api/v1/plans").send(minimalPayload);
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -155,7 +192,7 @@ describe("Plans Module (Mocked Database)", () => {
           updatedAt: new Date().toISOString(),
         });
 
-        const res = await request(app).post("/api/v1/plans").send({
+        const res = await api().post("/api/v1/plans").send({
           name: `${interval} Plan`,
           billingInterval: interval,
         });
@@ -166,7 +203,7 @@ describe("Plans Module (Mocked Database)", () => {
     );
 
     it("should reject missing name with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         billingInterval: "MONTH",
       });
 
@@ -176,7 +213,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject blank or whitespace-only name with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         name: "    ",
         billingInterval: "MONTH",
       });
@@ -187,7 +224,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject invalid billing intervals with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         name: "Biweekly Plan",
         billingInterval: "BIWEEKLY",
       });
@@ -198,7 +235,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-positive interval count (0 or negative) with 400", async () => {
-      const resZero = await request(app).post("/api/v1/plans").send({
+      const resZero = await api().post("/api/v1/plans").send({
         name: "Zero Interval",
         billingInterval: "MONTH",
         intervalCount: 0,
@@ -207,7 +244,7 @@ describe("Plans Module (Mocked Database)", () => {
       expect(resZero.status).toBe(400);
       expect(resZero.body.code).toBe("VALIDATION_ERROR");
 
-      const resNeg = await request(app).post("/api/v1/plans").send({
+      const resNeg = await api().post("/api/v1/plans").send({
         name: "Negative Interval",
         billingInterval: "MONTH",
         intervalCount: -2,
@@ -218,7 +255,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-integer interval count with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         name: "Float Interval",
         billingInterval: "MONTH",
         intervalCount: 2.5,
@@ -229,7 +266,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-positive minimum quantity with 400", async () => {
-      const resZero = await request(app).post("/api/v1/plans").send({
+      const resZero = await api().post("/api/v1/plans").send({
         name: "Zero Qty",
         billingInterval: "MONTH",
         minimumQuantity: 0,
@@ -238,7 +275,7 @@ describe("Plans Module (Mocked Database)", () => {
       expect(resZero.status).toBe(400);
       expect(resZero.body.code).toBe("VALIDATION_ERROR");
 
-      const resNeg = await request(app).post("/api/v1/plans").send({
+      const resNeg = await api().post("/api/v1/plans").send({
         name: "Negative Qty",
         billingInterval: "MONTH",
         minimumQuantity: -1,
@@ -249,7 +286,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-integer minimum quantity with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         name: "Float Qty",
         billingInterval: "MONTH",
         minimumQuantity: 1.5,
@@ -260,7 +297,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject unsupported status values with 400", async () => {
-      const res = await request(app).post("/api/v1/plans").send({
+      const res = await api().post("/api/v1/plans").send({
         name: "Bad Status Plan",
         billingInterval: "MONTH",
         status: "DELETED",
@@ -285,7 +322,7 @@ describe("Plans Module (Mocked Database)", () => {
       };
       mockPrisma.plan.findUnique.mockResolvedValue(mockPlan);
 
-      const res = await request(app).get(`/api/v1/plans/${validPlanId}`);
+      const res = await api().get(`/api/v1/plans/${validPlanId}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -296,7 +333,7 @@ describe("Plans Module (Mocked Database)", () => {
     it("should return 404 when plan is not found", async () => {
       mockPrisma.plan.findUnique.mockResolvedValue(null);
 
-      const res = await request(app).get(`/api/v1/plans/${validPlanId}`);
+      const res = await api().get(`/api/v1/plans/${validPlanId}`);
 
       expect(res.status).toBe(404);
       expect(res.body.success).toBe(false);
@@ -304,7 +341,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject invalid UUID with 400", async () => {
-      const res = await request(app).get("/api/v1/plans/not-a-valid-uuid");
+      const res = await api().get("/api/v1/plans/not-a-valid-uuid");
 
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
@@ -333,7 +370,7 @@ describe("Plans Module (Mocked Database)", () => {
       mockPrisma.plan.findUnique.mockResolvedValue(existingPlan);
       mockPrisma.plan.update.mockResolvedValue(updatedPlan);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ name: "New Name", status: "INACTIVE" });
 
@@ -364,7 +401,7 @@ describe("Plans Module (Mocked Database)", () => {
         intervalCount: 6,
       });
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ intervalCount: 6 });
 
@@ -379,7 +416,7 @@ describe("Plans Module (Mocked Database)", () => {
     it("should return 404 when updating non-existent plan", async () => {
       mockPrisma.plan.findUnique.mockResolvedValue(null);
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ name: "New Plan" });
 
@@ -389,7 +426,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject empty update body with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({});
 
@@ -399,7 +436,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject blank name in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ name: "   " });
 
@@ -408,7 +445,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject invalid billing interval in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ billingInterval: "SEMIANNUAL" });
 
@@ -417,7 +454,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-positive interval count in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ intervalCount: 0 });
 
@@ -426,7 +463,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject non-positive minimum quantity in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ minimumQuantity: -5 });
 
@@ -435,7 +472,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject unsupported status in update with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/v1/plans/${validPlanId}`)
         .send({ status: "DELETED" });
 
@@ -444,7 +481,7 @@ describe("Plans Module (Mocked Database)", () => {
     });
 
     it("should reject invalid UUID in params with 400", async () => {
-      const res = await request(app)
+      const res = await api()
         .patch("/api/v1/plans/12345")
         .send({ name: "Invalid ID Plan" });
 
