@@ -3,6 +3,8 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import productsRouter from "../modules/products/products.routes";
+import plansRouter from "../modules/plans/plans.routes";
 import invoicesRoutes from "../modules/invoices/invoices.routes";
 import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
 import dashboardRoutes from "../modules/dashboard/dashboard.routes";
@@ -62,6 +64,10 @@ router.get(
   }),
 );
 
+// Products, Variants, and Plans modules (Member 2)
+router.use("/products", productsRouter);
+router.use("/plans", plansRouter);
+
 // Register Module 1 Routes
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -73,3 +79,4 @@ router.use("/payments", paymentsRouter);
 router.use("/dashboard", dashboardRoutes);
 
 export default router;
+
