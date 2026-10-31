@@ -3,6 +3,7 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import subscriptionRoutes from "../modules/subscriptions/subscriptions.routes";
 
 const router = Router();
 
@@ -50,5 +51,8 @@ router.get(
     return sendSuccess(res, data, "Brightloop API is running", 200);
   }),
 );
+
+// Member 3: Subscription Management & Pricing
+router.use("/subscriptions", subscriptionRoutes);
 
 export default router;
