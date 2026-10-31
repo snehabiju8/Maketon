@@ -22,7 +22,7 @@ export const createApp = (): Express => {
       origin: env.FRONTEND_URL,
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Brightloop-Request"],
     }),
   );
 

@@ -9,6 +9,11 @@ import invoicesRoutes from "../modules/invoices/invoices.routes";
 import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
 import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 
+// Module routes
+import authRoutes from "../modules/auth/auth.routes";
+import usersRoutes from "../modules/users/users.routes";
+import customersRoutes from "../modules/customers/customers.routes";
+
 const router = Router();
 
 // Allows for a Neon compute waking up from suspension
@@ -20,7 +25,10 @@ const checkDatabase = async (): Promise<boolean> => {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error("Database health check timed out")), DB_HEALTH_TIMEOUT_MS);
+        timer = setTimeout(
+          () => reject(new Error("Database health check timed out")),
+          DB_HEALTH_TIMEOUT_MS,
+        );
       }),
     ]);
     return true;
@@ -60,6 +68,10 @@ router.get(
 router.use("/products", productsRouter);
 router.use("/plans", plansRouter);
 
+// Register Module 1 Routes
+router.use("/auth", authRoutes);
+router.use("/users", usersRoutes);
+router.use("/customers", customersRoutes);
 // Billing, invoices, payments and dashboard (Member 4)
 router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
 router.use("/invoices", invoicesRoutes);
