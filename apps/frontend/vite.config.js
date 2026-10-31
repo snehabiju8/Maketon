@@ -12,5 +12,9 @@ export default defineConfig({
     server: {
         port: 5173,
         host: true,
+        // Forward API calls to the backend during development
+        proxy: {
+            '/api': 'http://localhost:5000',
+        },
     },
 });

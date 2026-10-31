@@ -4,6 +4,9 @@ import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
 import productsRouter from "../modules/products/products.routes";
+import invoicesRoutes from "../modules/invoices/invoices.routes";
+import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
+import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 
 const router = Router();
 
@@ -52,8 +55,14 @@ router.get(
   }),
 );
 
-// Module route mounts
+// Products and Variants module (Member 2)
 router.use("/products", productsRouter);
+
+// Billing, invoices, payments and dashboard (Member 4)
+router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
+router.use("/invoices", invoicesRoutes);
+router.use("/payments", paymentsRouter);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;
 
