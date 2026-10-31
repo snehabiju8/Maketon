@@ -3,6 +3,9 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import invoicesRoutes from "../modules/invoices/invoices.routes";
+import { invoicePaymentsRouter, paymentsRouter } from "../modules/payments/payments.routes";
+import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 
 // Module routes
 import authRoutes from "../modules/auth/auth.routes";
@@ -63,5 +66,10 @@ router.get(
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
 router.use("/customers", customersRoutes);
+// Billing, invoices, payments and dashboard (Member 4)
+router.use("/invoices/:invoiceId/payments", invoicePaymentsRouter);
+router.use("/invoices", invoicesRoutes);
+router.use("/payments", paymentsRouter);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;
