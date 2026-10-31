@@ -3,6 +3,7 @@ import { sendSuccess, sendError } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { prisma } from "../lib/prisma";
 import { logger } from "../lib/logger";
+import productsRouter from "../modules/products/products.routes";
 
 const router = Router();
 
@@ -51,4 +52,8 @@ router.get(
   }),
 );
 
+// Module route mounts
+router.use("/products", productsRouter);
+
 export default router;
+
