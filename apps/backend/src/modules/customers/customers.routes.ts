@@ -10,7 +10,7 @@ import {
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { csrfProtection } from "../../middleware/csrf";
-import { validate } from "../../middleware/validate";
+import { validateRequest } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/async-handler";
 
 const router = Router();
@@ -23,7 +23,7 @@ router.post(
   "/",
   authorize(Role.ADMIN, Role.INTERNAL),
   csrfProtection,
-  validate(createCustomerSchema),
+  validateRequest({ body: createCustomerSchema.shape.body }),
   asyncHandler(customersController.createCustomer),
 );
 
@@ -31,14 +31,14 @@ router.post(
 router.get(
   "/",
   authorize(Role.ADMIN, Role.INTERNAL),
-  validate(customerQuerySchema),
+  validateRequest({ query: customerQuerySchema.shape.query }),
   asyncHandler(customersController.listCustomers),
 );
 
 // Retrieve customer profile by ID (enforces customer tenant ownership)
 router.get(
   "/:id",
-  validate(customerIdParamSchema),
+  validateRequest({ params: customerIdParamSchema.shape.params }),
   asyncHandler(customersController.getCustomerById),
 );
 
@@ -46,7 +46,10 @@ router.get(
 router.patch(
   "/:id",
   csrfProtection,
-  validate(updateCustomerSchema),
+  validateRequest({
+    params: updateCustomerSchema.shape.params,
+    body: updateCustomerSchema.shape.body,
+  }),
   asyncHandler(customersController.updateCustomer),
 );
 

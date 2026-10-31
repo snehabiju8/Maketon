@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
 import { registerSchema, loginSchema } from "./auth.validation";
-import { validate } from "../../middleware/validate";
+import { validateRequest } from "../../middleware/validate";
 import { authenticate } from "../../middleware/authenticate";
 import { authRateLimiter } from "../../middleware/rate-limiter";
 import { csrfProtection } from "../../middleware/csrf";
@@ -14,7 +14,7 @@ router.post(
   "/register",
   authRateLimiter,
   csrfProtection,
-  validate(registerSchema),
+  validateRequest({ body: registerSchema }),
   asyncHandler(authController.register),
 );
 
@@ -22,7 +22,7 @@ router.post(
   "/login",
   authRateLimiter,
   csrfProtection,
-  validate(loginSchema),
+  validateRequest({ body: loginSchema }),
   asyncHandler(authController.login),
 );
 

@@ -1,10 +1,30 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
+
+let currentTestRole: "ADMIN" | "INTERNAL" | "CUSTOMER" = "ADMIN";
+
+vi.mock("../src/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findUnique: vi.fn().mockImplementation(async () => ({
+        id: "00000000-0000-0000-0000-000000000001",
+        email: "t@x.io",
+        role: currentTestRole,
+        customerId: null,
+        customer: null,
+      })),
+    },
+  },
+  default: {},
+}));
+
 import { app } from "../src/app";
 import { signToken } from "../src/lib/jwt";
 
-const tokenFor = (role: "ADMIN" | "INTERNAL" | "CUSTOMER") =>
-  `Bearer ${signToken({ userId: "00000000-0000-0000-0000-000000000001", email: "t@x.io", role })}`;
+const tokenFor = (role: "ADMIN" | "INTERNAL" | "CUSTOMER") => {
+  currentTestRole = role;
+  return `Bearer ${signToken({ userId: "00000000-0000-0000-0000-000000000001", email: "t@x.io", role })}`;
+};
 
 describe("Billing module access control", () => {
   it("rejects unauthenticated requests", async () => {
